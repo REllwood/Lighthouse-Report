@@ -1,0 +1,10 @@
+{
+  "name": "Lighthouse-Report",
+  "version": "1.0.0",
+  "devDependencies": {
+    "chrome-launcher": "^0.15.1",
+    "html-pdf": "^3.0.1",
+    "html-pdf-node": "^1.0.8",
+    "lighthouse": "^9.6.7"
+  }
+}
