@@ -1,4 +1,5 @@
 const { loadConfig, missingSettings, bigQueryEnabled } = require('./lib/config');
+const { parseRequest } = require('./lib/validate');
 const { analyseUrls } = require('./lib/pagespeed');
 const { saveResults } = require('./lib/bigquery');
 const { buildPdf } = require('./lib/pdf');
@@ -26,6 +27,12 @@ function createHandler({ env = process.env, fetchImpl = fetch, bigquery, transpo
     };
 
     async function handle(req, res) {
+        if (req.method !== 'POST') {
+            res.set('Allow', 'POST');
+            res.status(405).json({ error: 'Send a POST request with a JSON body' });
+            return;
+        }
+
         // Check the settings before doing anything that uses API quota
         const config = loadConfig(env);
         const missing = missingSettings(config);
@@ -35,11 +42,14 @@ function createHandler({ env = process.env, fetchImpl = fetch, bigquery, transpo
             return;
         }
 
-        const urls = req.body.urls;
-        const email = req.body.email;
+        const request = parseRequest(req.body, config);
+        if (request.errors) {
+            res.status(400).json({ errors: request.errors });
+            return;
+        }
 
         // Runs every URL through PageSpeed Insights at the same time and waits for all of them before carrying on
-        const { results, failures } = await analyseUrls(urls, { apiKey: config.psiApiKey, strategy: 'mobile', fetchImpl });
+        const { results, failures } = await analyseUrls(request.urls, { apiKey: config.psiApiKey, strategy: request.strategy, fetchImpl });
         for (const failure of failures) {
             console.error(`PageSpeed Insights failed for ${failure.url}: ${failure.error}`);
         }
@@ -63,21 +73,21 @@ function createHandler({ env = process.env, fetchImpl = fetch, bigquery, transpo
         const pdf = await buildPdf(results, failures);
 
         try {
-            await sendReport(transporterFactory(config.smtp), { from: config.mailFrom, to: email, pdf, results, failures });
+            await sendReport(transporterFactory(config.smtp), { from: config.mailFrom, to: request.email, pdf, results, failures });
         } catch (err) {
             console.error(`Email failed: ${err.message}`);
             res.status(500).json({ error: 'The report was generated but the email could not be sent' });
             return;
         }
 
-        console.log(`Lighthouse report for ${results.length} URL(s) sent to ${email}`);
-        res.status(200).json({ message: `Lighthouse report sent to ${email}`, results, failures });
+        console.log(`Lighthouse report for ${results.length} URL(s) sent to ${request.email}`);
+        res.status(200).json({ message: `Lighthouse report sent to ${request.email}`, results, failures });
     }
 }
 
 /**
- * HTTP Cloud Function. Takes a request body (example in readme), runs a Google Lighthouse report on each URL using the PageSpeed Insights API,
- * loads the results into a BigQuery table (when configured), generates a PDF report of the results and sends it as an email attachment to the requested email
+ * HTTP Cloud Function. Takes a JSON body like {"urls": ["https://example.com"], "email": "example@gmail.com"}, runs each URL through
+ * PageSpeed Insights (Lighthouse), loads the results into BigQuery (when configured) and emails a PDF report to the address given
  */
 exports.run_lighthouse = createHandler();
 exports.createHandler = createHandler;

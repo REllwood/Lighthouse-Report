@@ -4,18 +4,20 @@ const { loadConfig, missingSettings, bigQueryEnabled } = require('../lib/config'
 
 test('loadConfig applies defaults and missingSettings lists what is required', () => {
     const config = loadConfig({});
+    assert.equal(config.maxUrls, 10);
     assert.equal(config.smtp.host, 'smtp.gmail.com');
     assert.equal(config.smtp.port, 465);
     assert.equal(bigQueryEnabled(config), false);
-    assert.deepEqual(missingSettings(config), ['SMTP_USER', 'SMTP_PASS']);
+    assert.deepEqual(missingSettings(config), ['PSI_API_KEY', 'SMTP_USER', 'SMTP_PASS']);
 });
 
 test('loadConfig reads every setting from the environment', () => {
     const config = loadConfig({
-        PSI_API_KEY: 'key', BQ_DATASET: 'web', BQ_TABLE: 'lighthouse',
+        PSI_API_KEY: 'key', MAX_URLS: '5', BQ_DATASET: 'web', BQ_TABLE: 'lighthouse',
         SMTP_HOST: 'smtp.example.com', SMTP_PORT: '587', SMTP_USER: 'user@example.com', SMTP_PASS: 'pass', MAIL_FROM: 'Reports <reports@example.com>',
     });
     assert.equal(config.psiApiKey, 'key');
+    assert.equal(config.maxUrls, 5);
     assert.deepEqual(config.bigQuery, { datasetId: 'web', tableId: 'lighthouse' });
     assert.deepEqual(config.smtp, { host: 'smtp.example.com', port: 587, user: 'user@example.com', pass: 'pass' });
     assert.equal(config.mailFrom, 'Reports <reports@example.com>');
