@@ -1,3 +1,4 @@
+const zlib = require('node:zlib');
 const psiResponse = require('./fixtures/psi-response.json');
 
 /**
@@ -22,4 +23,27 @@ function fakeFetch(handler = () => undefined) {
     return { fetchImpl, calls };
 }
 
-module.exports = { psiFixture, fakeFetch };
+/**
+ * Pulls the text out of a PDF made by PDFKit (standard fonts write text as hex strings inside TJ operators)
+ * @param pdf - The PDF as a Buffer
+ * @returns {string}
+ */
+function pdfText(pdf) {
+    const raw = pdf.toString('latin1');
+    const lines = [];
+    for (const match of raw.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)) {
+        let content;
+        try {
+            content = zlib.inflateSync(Buffer.from(match[1], 'latin1')).toString('latin1');
+        } catch {
+            continue;
+        }
+        for (const tj of content.matchAll(/\[(.*?)\] TJ/g)) {
+            const hexParts = [...tj[1].matchAll(/<([0-9a-fA-F]*)>/g)].map(part => Buffer.from(part[1], 'hex').toString('latin1'));
+            lines.push(hexParts.join(''));
+        }
+    }
+    return lines.join('\n');
+}
+
+module.exports = { psiFixture, fakeFetch, pdfText };
