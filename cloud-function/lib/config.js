@@ -6,6 +6,7 @@
 function loadConfig(env = process.env) {
     return {
         psiApiKey: env.PSI_API_KEY || '',
+        maxUrls: positiveInteger(env.MAX_URLS, 10),
         bigQuery: {
             datasetId: env.BQ_DATASET || '',
             tableId: env.BQ_TABLE || '',
@@ -27,6 +28,7 @@ function loadConfig(env = process.env) {
  */
 function missingSettings(config) {
     const missing = [];
+    if (!config.psiApiKey) missing.push('PSI_API_KEY');
     if (!config.smtp.user) missing.push('SMTP_USER');
     if (!config.smtp.pass) missing.push('SMTP_PASS');
     if (config.bigQuery.datasetId && !config.bigQuery.tableId) missing.push('BQ_TABLE');

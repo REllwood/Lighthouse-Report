@@ -11,7 +11,7 @@ const ENV = {
     BQ_DATASET: 'web',
     BQ_TABLE: 'lighthouse',
 };
-const BODY = { urls: ['https://example.com/', 'https://example2.com/'], email: 'someone@example.com' };
+const BODY = { urls: ['https://example.com', 'https://example2.com'], email: 'someone@example.com' };
 
 function fakeResponse() {
     return {
@@ -140,6 +140,25 @@ test('returns 500 when the email cannot be sent, instead of leaving the request 
     const { res } = await run({ sendMail: () => { throw new Error('Invalid login: 535-5.7.8 Username and Password not accepted'); } });
     assert.equal(res.statusCode, 500);
     assert.deepEqual(res.body, { error: 'The report was generated but the email could not be sent' });
+});
+
+test('returns 400 with the problems for an invalid body, before calling PageSpeed Insights', async () => {
+    const { res, psiCalls } = await run({ req: { method: 'POST', body: { urls: [], email: 'nope' } } });
+    assert.equal(res.statusCode, 400);
+    assert.deepEqual(res.body.errors, ['"urls" must be a non-empty array of URLs', '"email" must be a single valid email address']);
+    assert.equal(psiCalls.length, 0);
+});
+
+test('returns 400 when there is no JSON body', async () => {
+    const { res } = await run({ req: { method: 'POST', body: undefined } });
+    assert.equal(res.statusCode, 400);
+});
+
+test('only accepts POST', async () => {
+    const { res, psiCalls } = await run({ req: { method: 'GET', body: undefined } });
+    assert.equal(res.statusCode, 405);
+    assert.equal(res.headers.Allow, 'POST');
+    assert.equal(psiCalls.length, 0);
 });
 
 test('returns 500 without using any quota when settings are missing', async () => {
