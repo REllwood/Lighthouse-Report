@@ -5,7 +5,7 @@ Lighthouse is quick and easy way to analyzes web apps and web pages, collecting 
 
 Lighthouse-Reports uses Lighthouse to run reports, returning the results in multiple formats to be used at a later date for analysis or review.
 
-If you want to run this in a Serverless Cloud Function, you will want to deploy the cloudFunction.js
+If you want to run this in a Serverless Cloud Function, you will want to deploy the cloud-function folder
 
 The System currently takes in an array of URLs and an email address and loads the results of that reports into a specified BigQuery table and then emails the user a PDF report of the run.
 
@@ -20,7 +20,7 @@ The System currently takes in an array of URLs and an email address and loads th
 
 
 ## Usage/Examples
-The main function to use for deployment is the cloudFunction.js file. An example of the request body to the cloud function would look like below
+The main function to use for deployment is `run_lighthouse` in the cloud-function folder, which has its own package.json listing everything it needs. An example of the request body to the cloud function would look like below
 ```javascript
 {
     "urls": [

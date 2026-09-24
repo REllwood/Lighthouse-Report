@@ -1,0 +1,23 @@
+{
+  "name": "lighthouse-report-function",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloud Function that runs PageSpeed Insights (Lighthouse) on a list of URLs, loads the results into BigQuery and emails a PDF report",
+  "license": "Apache-2.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "functions-framework --target=run_lighthouse"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@google-cloud/bigquery": "^9.1.0",
+    "axios": "^1.20.0",
+    "nodemailer": "^10.0.10",
+    "pdfkit": "^0.20.2"
+  },
+  "devDependencies": {
+    "@google-cloud/functions-framework": "^5.0.5"
+  }
+}
