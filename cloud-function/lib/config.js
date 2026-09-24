@@ -1,5 +1,5 @@
 /**
- * Reads the function's settings from environment variables. Set these on the Cloud Function, with secrets (PSI_API_KEY) coming from Secret Manager
+ * Reads the function's settings from environment variables. Set these on the Cloud Function, with secrets (PSI_API_KEY, SMTP_PASS) coming from Secret Manager
  * @param env - The environment to read from, defaults to process.env
  * @returns {object}
  */
@@ -10,6 +10,13 @@ function loadConfig(env = process.env) {
             datasetId: env.BQ_DATASET || '',
             tableId: env.BQ_TABLE || '',
         },
+        smtp: {
+            host: env.SMTP_HOST || 'smtp.gmail.com',
+            port: positiveInteger(env.SMTP_PORT, 465),
+            user: env.SMTP_USER || '',
+            pass: env.SMTP_PASS || '',
+        },
+        mailFrom: env.MAIL_FROM || env.SMTP_USER || '',
     };
 }
 
@@ -20,6 +27,8 @@ function loadConfig(env = process.env) {
  */
 function missingSettings(config) {
     const missing = [];
+    if (!config.smtp.user) missing.push('SMTP_USER');
+    if (!config.smtp.pass) missing.push('SMTP_PASS');
     if (config.bigQuery.datasetId && !config.bigQuery.tableId) missing.push('BQ_TABLE');
     if (config.bigQuery.tableId && !config.bigQuery.datasetId) missing.push('BQ_DATASET');
     return missing;
@@ -32,6 +41,11 @@ function missingSettings(config) {
  */
 function bigQueryEnabled(config) {
     return Boolean(config.bigQuery.datasetId && config.bigQuery.tableId);
+}
+
+function positiveInteger(value, fallback) {
+    const number = Number.parseInt(value, 10);
+    return Number.isInteger(number) && number > 0 ? number : fallback;
 }
 
 module.exports = { loadConfig, missingSettings, bigQueryEnabled };

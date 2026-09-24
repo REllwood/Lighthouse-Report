@@ -1,28 +1,18 @@
-const nodemailer = require('nodemailer');
 const { loadConfig, missingSettings, bigQueryEnabled } = require('./lib/config');
 const { analyseUrls } = require('./lib/pagespeed');
 const { saveResults } = require('./lib/bigquery');
 const { buildPdf } = require('./lib/pdf');
-
-function gmailTransport() {
-    return nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: 'test@gmail.com',
-            pass: 'Gmail Password'
-        }
-    });
-}
+const { createTransport, sendReport } = require('./lib/email');
 
 /**
  * Builds the HTTP handler. The defaults talk to the real services, tests pass in fakes
  * @param deps.env - Environment variables
  * @param deps.fetchImpl - fetch function used for PageSpeed Insights
  * @param deps.bigquery - BigQuery client
- * @param deps.transporterFactory - Creates the email transport
+ * @param deps.transporterFactory - Creates the email transport from the SMTP settings
  * @returns {function(req, res): Promise<void>}
  */
-function createHandler({ env = process.env, fetchImpl = fetch, bigquery, transporterFactory = gmailTransport } = {}) {
+function createHandler({ env = process.env, fetchImpl = fetch, bigquery, transporterFactory = createTransport } = {}) {
     return async function runLighthouse(req, res) {
         try {
             await handle(req, res);
@@ -47,7 +37,6 @@ function createHandler({ env = process.env, fetchImpl = fetch, bigquery, transpo
 
         const urls = req.body.urls;
         const email = req.body.email;
-        const pdfName = 'lighthouse-report.pdf';
 
         // Runs every URL through PageSpeed Insights at the same time and waits for all of them before carrying on
         const { results, failures } = await analyseUrls(urls, { apiKey: config.psiApiKey, strategy: 'mobile', fetchImpl });
@@ -71,23 +60,18 @@ function createHandler({ env = process.env, fetchImpl = fetch, bigquery, transpo
         }
 
         // Builds the whole PDF in memory first, so the email has the finished file to attach
-        const pdfData = await buildPdf(results, failures);
+        const pdf = await buildPdf(results, failures);
 
-        //This emails the user the report with a small subject and text outlining what is in the report
-        const mailOptions = {
-            from: 'emailservice@gmail.com',
-            to: email,
-            subject: 'Lighthouse Report',
-            text: 'Please find attached the Lighthouse report for the URLs you provided',
-            attachments: [{
-                filename: pdfName,
-                content: pdfData,
-                contentType: 'application/pdf'
-            }]
-        };
-        const info = await transporterFactory().sendMail(mailOptions);
-        console.log(`Email sent: ${info.response}`);
-        res.send(`Lighthouse report generated and sent to ${email}`);
+        try {
+            await sendReport(transporterFactory(config.smtp), { from: config.mailFrom, to: email, pdf, results, failures });
+        } catch (err) {
+            console.error(`Email failed: ${err.message}`);
+            res.status(500).json({ error: 'The report was generated but the email could not be sent' });
+            return;
+        }
+
+        console.log(`Lighthouse report for ${results.length} URL(s) sent to ${email}`);
+        res.status(200).json({ message: `Lighthouse report sent to ${email}`, results, failures });
     }
 }
 
