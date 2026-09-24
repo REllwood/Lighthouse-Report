@@ -1,15 +1,17 @@
-const { BigQuery } = require('@google-cloud/bigquery');
 const pdf = require('pdfkit');
 const nodemailer = require('nodemailer');
+const { loadConfig, missingSettings, bigQueryEnabled } = require('./lib/config');
 const { analyseUrls } = require('./lib/pagespeed');
+const { saveResults } = require('./lib/bigquery');
 
 /**
  * Builds the HTTP handler. The defaults talk to the real services, tests pass in fakes
  * @param deps.env - Environment variables
  * @param deps.fetchImpl - fetch function used for PageSpeed Insights
+ * @param deps.bigquery - BigQuery client
  * @returns {function(req, res): Promise<void>}
  */
-function createHandler({ env = process.env, fetchImpl = fetch } = {}) {
+function createHandler({ env = process.env, fetchImpl = fetch, bigquery } = {}) {
     return async function runLighthouse(req, res) {
         try {
             await handle(req, res);
@@ -23,6 +25,15 @@ function createHandler({ env = process.env, fetchImpl = fetch } = {}) {
     };
 
     async function handle(req, res) {
+        // Check the settings before doing anything that uses API quota
+        const config = loadConfig(env);
+        const missing = missingSettings(config);
+        if (missing.length > 0) {
+            console.error(`Missing environment variables: ${missing.join(', ')}`);
+            res.status(500).json({ error: 'The function is not configured yet, see the logs for which settings are missing' });
+            return;
+        }
+
         const urls = req.body.urls;
         const email = req.body.email;
         const pdfName = 'lighthouse-report.pdf';
@@ -36,7 +47,7 @@ function createHandler({ env = process.env, fetchImpl = fetch } = {}) {
         });
 
         // Runs every URL through PageSpeed Insights at the same time and waits for all of them before carrying on
-        const { results, failures } = await analyseUrls(urls, { apiKey: env.PSI_API_KEY, strategy: 'mobile', fetchImpl });
+        const { results, failures } = await analyseUrls(urls, { apiKey: config.psiApiKey, strategy: 'mobile', fetchImpl });
         for (const failure of failures) {
             console.error(`PageSpeed Insights failed for ${failure.url}: ${failure.error}`);
         }
@@ -45,12 +56,16 @@ function createHandler({ env = process.env, fetchImpl = fetch } = {}) {
             return;
         }
 
-        //Loading report into BQ
-        const bigquery = new BigQuery();
-        const datasetId = ''; // Add dataset ID
-        const tableId = '';  // Add tableID eg. Lighthouse report
-        const table = bigquery.dataset(datasetId).table(tableId);
-        await table.insert(results);
+        // Loads one row per URL into BigQuery, when BQ_DATASET and BQ_TABLE are set
+        if (bigQueryEnabled(config)) {
+            try {
+                await saveResults(results, config.bigQuery, bigquery);
+            } catch (err) {
+                console.error(err.message);
+                res.status(500).json({ error: 'Could not save the results to BigQuery' });
+                return;
+            }
+        }
 
         //This is messy but it formats the report nicely
         const doc = new pdf();
@@ -98,7 +113,7 @@ function createHandler({ env = process.env, fetchImpl = fetch } = {}) {
 
 /**
  * HTTP Cloud Function. Takes a request body (example in readme), runs a Google Lighthouse report on each URL using the PageSpeed Insights API,
- * loads the results into a BigQuery table, generates a PDF report of the results and sends it as an email attachment to the requested email
+ * loads the results into a BigQuery table (when configured), generates a PDF report of the results and sends it as an email attachment to the requested email
  */
 exports.run_lighthouse = createHandler();
 exports.createHandler = createHandler;

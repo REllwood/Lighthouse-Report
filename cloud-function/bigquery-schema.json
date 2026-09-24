@@ -1,0 +1,13 @@
+[
+  { "name": "url", "type": "STRING", "mode": "REQUIRED", "description": "URL that was requested" },
+  { "name": "final_url", "type": "STRING", "mode": "NULLABLE", "description": "URL after any redirects" },
+  { "name": "strategy", "type": "STRING", "mode": "REQUIRED", "description": "mobile or desktop" },
+  { "name": "fetched_at", "type": "TIMESTAMP", "mode": "REQUIRED", "description": "When Lighthouse ran" },
+  { "name": "lighthouse_version", "type": "STRING", "mode": "NULLABLE" },
+  { "name": "performance_score", "type": "INTEGER", "mode": "NULLABLE", "description": "Performance score out of 100" },
+  { "name": "first_contentful_paint_ms", "type": "FLOAT", "mode": "NULLABLE" },
+  { "name": "largest_contentful_paint_ms", "type": "FLOAT", "mode": "NULLABLE" },
+  { "name": "total_blocking_time_ms", "type": "FLOAT", "mode": "NULLABLE" },
+  { "name": "speed_index_ms", "type": "FLOAT", "mode": "NULLABLE" },
+  { "name": "cumulative_layout_shift", "type": "FLOAT", "mode": "NULLABLE" }
+]
