@@ -1,106 +1,104 @@
-const axios = require('axios');
 const { BigQuery } = require('@google-cloud/bigquery');
 const pdf = require('pdfkit');
 const nodemailer = require('nodemailer');
-
-
-
+const { analyseUrls } = require('./lib/pagespeed');
 
 /**
- * This function is takes a request body (example in readme), it then runs a Google Lighthouse report on each URL using the Lighthouse API, loads the report results into a BigQuery table,
- * generates a PDF report of the results and sends it as an email attachment to the users requested email
- * @param req - This is used to kick off the function, this should contain a body with a URL array and an email address of where to send
- * the report in a PDF format
- * @returns {Promise<void>}
+ * Builds the HTTP handler. The defaults talk to the real services, tests pass in fakes
+ * @param deps.env - Environment variables
+ * @param deps.fetchImpl - fetch function used for PageSpeed Insights
+ * @returns {function(req, res): Promise<void>}
  */
-exports.run_lighthouse = (req, res) => {
-    const urls = req.body.urls;
-    const email = req.body.email;
-    const apiKey = process.env.API_KEY;
-    const bigquery = new BigQuery();
-    const datasetId = ''; // Add dataset ID
-    const tableId = '';  // Add tableID eg. Lighthouse report
-    const table = bigquery.dataset(datasetId).table(tableId);
-    const reports = [];
-    const pdfName = 'lighthouse-report.pdf';
-    let pdfData = '';
-    const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: 'test@gmail.com',
-            pass: 'Gmail Password'
-        }
-    });
-
-    for (let i = 0; i < urls.length; i++) {
-        const url = urls[i];
-        axios.get(`https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${url}&strategy=mobile`, {
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json'
+function createHandler({ env = process.env, fetchImpl = fetch } = {}) {
+    return async function runLighthouse(req, res) {
+        try {
+            await handle(req, res);
+        } catch (err) {
+            // Never send the error itself back, it can carry request details
+            console.error(`Unexpected error: ${err.stack || err.message}`);
+            if (!res.headersSent) {
+                res.status(500).json({ error: 'Something went wrong while generating the report' });
             }
-        })
-            .then(response => {
-                reports.push(response.data);
-                if (i === urls.length - 1) {
-                   //Loading report into BQ
-                    table.insert(reports)
-                        .then(() => {
-                            //This is messy but it formats the report nicely
-                            const doc = new pdf();
-                            doc.pipe(pdfData);
-                            doc.text('Lighthouse Report');
-                            doc.text(' ');
-                            doc.text(' ');
-                            doc.text(' ');
-                            for (let j = 0; j < reports.length; j++) {
-                                doc.text(`Report ${j + 1}`);
-                                doc.text(`Score: ${reports[j].score}`);
-                                doc.text(`Title: ${reports[j].title}`);
-                                doc.text(`Number of Resources: ${reports[j].pageStats.numberResources}`);
-                                doc.text(`Number of Hosts: ${reports[j].pageStats.numberHosts}`);
-                                doc.text(`Total Request Bytes: ${reports[j].pageStats.totalRequestBytes}`);
-                                doc.text(`Number of Static Resources: ${reports[j].pageStats.numberStaticResources}`);
-                                doc.text(`HTML Response Bytes: ${reports[j].pageStats.htmlResponseBytes}`);
-                                doc.text(`CSS Response Bytes: ${reports[j].pageStats.cssResponseBytes}`);
-                                doc.text(`Image Response Bytes: ${reports[j].pageStats.imageResponseBytes}`);
-                                doc.text(`JavaScript Response Bytes: ${reports[j].pageStats.javascriptResponseBytes}`);
-                                doc.text(`Other Response Bytes: ${reports[j].pageStats.otherResponseBytes}`);
-                                doc.text(`Number of JS Resources: ${reports[j].pageStats.numberJsResources}`);
-                                doc.text(`Number of CSS Resources: ${reports[j].pageStats.numberCssResources}`);
-                                doc.text(' ');
-                                doc.text(' ');
-                            }
-                            doc.end();
+        }
+    };
 
-                            //This emails the user the report with a small subject and text outlining what is in the report
-                            const mailOptions = {
-                                from: 'emailservice@gmail.com',
-                                to: email,
-                                subject: 'Lighthouse Report',
-                                text: 'Please find attached the Lighthouse report for the URLs you provided',
-                                attachments: [{
-                                    filename: pdfName,
-                                    content: pdfData
-                                }]
-                            };
-                            transporter.sendMail(mailOptions, (error, info) => {
-                                if (error) {
-                                    console.log(error);
-                                } else {
-                                    console.log(`Email sent: ${info.response}`);
-                                    res.send(`Lighthouse report generated and sent to ${email}`);
-                                }
-                            });
-                        })
-                        .catch(err => {
-                            console.error(err);
-                            res.status(500).send(err);
-                        });
-                }
-            })
-            .catch(err => {
-                console.error(err);
-                res.status(500).send(err);
-            });
-    }}
+    async function handle(req, res) {
+        const urls = req.body.urls;
+        const email = req.body.email;
+        const pdfName = 'lighthouse-report.pdf';
+        let pdfData = '';
+        const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                user: 'test@gmail.com',
+                pass: 'Gmail Password'
+            }
+        });
+
+        // Runs every URL through PageSpeed Insights at the same time and waits for all of them before carrying on
+        const { results, failures } = await analyseUrls(urls, { apiKey: env.PSI_API_KEY, strategy: 'mobile', fetchImpl });
+        for (const failure of failures) {
+            console.error(`PageSpeed Insights failed for ${failure.url}: ${failure.error}`);
+        }
+        if (results.length === 0) {
+            res.status(502).json({ error: 'None of the URLs could be analysed', failures });
+            return;
+        }
+
+        //Loading report into BQ
+        const bigquery = new BigQuery();
+        const datasetId = ''; // Add dataset ID
+        const tableId = '';  // Add tableID eg. Lighthouse report
+        const table = bigquery.dataset(datasetId).table(tableId);
+        await table.insert(results);
+
+        //This is messy but it formats the report nicely
+        const doc = new pdf();
+        doc.pipe(pdfData);
+        doc.text('Lighthouse Report');
+        doc.text(' ');
+        doc.text(' ');
+        doc.text(' ');
+        for (let j = 0; j < results.length; j++) {
+            doc.text(`Report ${j + 1}`);
+            doc.text(`Score: ${results[j].score}`);
+            doc.text(`Title: ${results[j].title}`);
+            doc.text(`Number of Resources: ${results[j].pageStats.numberResources}`);
+            doc.text(`Number of Hosts: ${results[j].pageStats.numberHosts}`);
+            doc.text(`Total Request Bytes: ${results[j].pageStats.totalRequestBytes}`);
+            doc.text(`Number of Static Resources: ${results[j].pageStats.numberStaticResources}`);
+            doc.text(`HTML Response Bytes: ${results[j].pageStats.htmlResponseBytes}`);
+            doc.text(`CSS Response Bytes: ${results[j].pageStats.cssResponseBytes}`);
+            doc.text(`Image Response Bytes: ${results[j].pageStats.imageResponseBytes}`);
+            doc.text(`JavaScript Response Bytes: ${results[j].pageStats.javascriptResponseBytes}`);
+            doc.text(`Other Response Bytes: ${results[j].pageStats.otherResponseBytes}`);
+            doc.text(`Number of JS Resources: ${results[j].pageStats.numberJsResources}`);
+            doc.text(`Number of CSS Resources: ${results[j].pageStats.numberCssResources}`);
+            doc.text(' ');
+            doc.text(' ');
+        }
+        doc.end();
+
+        //This emails the user the report with a small subject and text outlining what is in the report
+        const mailOptions = {
+            from: 'emailservice@gmail.com',
+            to: email,
+            subject: 'Lighthouse Report',
+            text: 'Please find attached the Lighthouse report for the URLs you provided',
+            attachments: [{
+                filename: pdfName,
+                content: pdfData
+            }]
+        };
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`Email sent: ${info.response}`);
+        res.send(`Lighthouse report generated and sent to ${email}`);
+    }
+}
+
+/**
+ * HTTP Cloud Function. Takes a request body (example in readme), runs a Google Lighthouse report on each URL using the PageSpeed Insights API,
+ * loads the results into a BigQuery table, generates a PDF report of the results and sends it as an email attachment to the requested email
+ */
+exports.run_lighthouse = createHandler();
+exports.createHandler = createHandler;

@@ -1,0 +1,78 @@
+{
+  "captchaResult": "CAPTCHA_NOT_NEEDED",
+  "kind": "pagespeedonline#result",
+  "id": "https://example.com/",
+  "lighthouseResult": {
+    "requestedUrl": "https://example.com/",
+    "finalUrl": "https://www.example.com/",
+    "mainDocumentUrl": "https://www.example.com/",
+    "finalDisplayedUrl": "https://www.example.com/",
+    "lighthouseVersion": "13.5.0",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+    "fetchTime": "2026-09-24T01:00:00.000Z",
+    "configSettings": {
+      "emulatedFormFactor": "mobile",
+      "formFactor": "mobile",
+      "locale": "en-US",
+      "onlyCategories": [
+        "performance"
+      ],
+      "channel": "lr"
+    },
+    "audits": {
+      "first-contentful-paint": {
+        "id": "first-contentful-paint",
+        "title": "First Contentful Paint",
+        "score": 1,
+        "scoreDisplayMode": "numeric",
+        "numericValue": 618.2592,
+        "numericUnit": "millisecond",
+        "displayValue": "0.6 s"
+      },
+      "largest-contentful-paint": {
+        "id": "largest-contentful-paint",
+        "title": "Largest Contentful Paint",
+        "score": 0.82,
+        "scoreDisplayMode": "numeric",
+        "numericValue": 2830.5,
+        "numericUnit": "millisecond",
+        "displayValue": "2.8 s"
+      },
+      "total-blocking-time": {
+        "id": "total-blocking-time",
+        "title": "Total Blocking Time",
+        "score": 0.78,
+        "scoreDisplayMode": "numeric",
+        "numericValue": 312,
+        "numericUnit": "millisecond",
+        "displayValue": "310 ms"
+      },
+      "cumulative-layout-shift": {
+        "id": "cumulative-layout-shift",
+        "title": "Cumulative Layout Shift",
+        "score": 0.99,
+        "scoreDisplayMode": "numeric",
+        "numericValue": 0.0421,
+        "numericUnit": "unitless",
+        "displayValue": "0.042"
+      },
+      "speed-index": {
+        "id": "speed-index",
+        "title": "Speed Index",
+        "score": 1,
+        "scoreDisplayMode": "numeric",
+        "numericValue": 618.2592,
+        "numericUnit": "millisecond",
+        "displayValue": "0.6 s"
+      }
+    },
+    "categories": {
+      "performance": {
+        "id": "performance",
+        "title": "Performance",
+        "score": 0.87
+      }
+    }
+  },
+  "analysisUTCTimestamp": "2026-09-24T01:00:05.123Z"
+}
