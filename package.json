@@ -1,10 +1,21 @@
 {
-  "name": "Lighthouse-Report",
+  "name": "lighthouse-report",
   "version": "1.0.0",
-  "devDependencies": {
-    "chrome-launcher": "^0.15.1",
-    "html-pdf": "^3.0.1",
-    "html-pdf-node": "^1.0.8",
-    "lighthouse": "^9.6.7"
+  "private": true,
+  "description": "Runs Google Lighthouse performance reports on a list of URLs and saves each report as a PDF",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "report": "node main.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "engines": {
+    "node": ">=22.19"
+  },
+  "dependencies": {
+    "chrome-launcher": "^1.2.1",
+    "lighthouse": "^13.5.0",
+    "puppeteer-core": "^25.12.0"
   }
 }
